@@ -1,0 +1,14 @@
+{
+  "name": "longboi",
+  "description": "Longboi — a dachshund for your Claude Code status line. The more you code, the longer he gets.",
+  "owner": {
+    "name": "Dumitru Crismari"
+  },
+  "plugins": [
+    {
+      "name": "longboi",
+      "source": "./",
+      "description": "An animated dachshund in the status line: grows with your streak, eats commits, naps at night, digs up bones, celebrates achievements."
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "name": "longboi",
+  "displayName": "Longboi",
+  "version": "0.1.0",
+  "description": "A dachshund that lives in your Claude Code status line. He grows longer as you code, eats commits, naps at night, digs up bones while the agent works, and celebrates your achievements. Zero dependencies, all local.",
+  "author": {
+    "name": "Dumitru Crismari"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/Dumys/longboi",
+  "repository": "https://github.com/Dumys/longboi",
+  "keywords": ["pet", "dachshund", "statusline", "fun", "tamagotchi", "dog"],
+  "skills": "./skills/"
+}
