@@ -23,9 +23,10 @@ everything that actually happens in your sessions:
   Every level makes him one segment longer. A serious streak produces a
   *seriously* long dog.
 - **He eats commits.** `git commit` through Claude = kibble. No commits by
-  afternoon and he starts thinking about bones (`…c==Ɔ?`).
-- **He sleeps at night.** After 2am he curls up (`˗ᴥ˗ ᶻᶻ`). If you are coding
-  at that hour, that makes one of you being responsible.
+  afternoon and a pixel bone appears in his thoughts.
+- **He sleeps at night.** After 2am he curls up into a loaf with little
+  pixel z's. If you are coding at that hour, that makes one of you being
+  responsible.
 - **He digs.** While agents grind away, he occasionally digs up a bone.
   Bones are forever. Bones are the point.
 - **He knows the family.** If [Token HUD](https://github.com/Dumys/token-hud)
@@ -63,6 +64,12 @@ node dog/longboi.js --install     # prints your adoption certificate
 | Return him | `node dog/longboi.js --uninstall` (he waits in `~/.claude/longboi`, not mad, just disappointed) |
 
 ## How it works
+
+He is real pixel art: an 8-px-tall sprite drawn with half-block characters
+(`▀` — one text cell carries two pixels via foreground + background color),
+so he renders in any modern terminal with no images and no dependencies.
+Terminals with exotic fonts can switch to a minimal glyph dog with
+`node dog/longboi.js --style text`.
 
 Claude Code re-runs the status line command on every message (and every 2 s
 via `refreshInterval` — that is the animation clock). Lightweight

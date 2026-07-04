@@ -26,7 +26,7 @@ const os = require('os');
 
 const DIR = process.env.LONGBOI_DIR || path.join(os.homedir(), '.claude', 'longboi');
 const STATE = path.join(DIR, 'state.json');
-const TOKEN_HUD = path.join(os.homedir(), '.claude', 'token-hud');
+const TOKEN_HUD = process.env.LONGBOI_TOKEN_HUD_DIR || path.join(os.homedir(), '.claude', 'token-hud');
 const TROPHY_UNLOCKED = path.join(os.homedir(), '.claude', 'trophy-case', 'unlocked.json');
 
 // force states for demos/tests: LONGBOI_DEMO='{"mood":"happy","frame":1,"segments":9}'
@@ -144,11 +144,116 @@ function decideMood(s, now) {
   return 'idle';
 }
 
-// -------------------------------------------------------------- the dog ----
+// ------------------------------------------------------- pixel dachshund ---
 /*
- * Two rows. Faces right; tail on the left.
- *   row1:  tail + body(segments × '▄') + head
- *   row2:  legs under both ends, then the info chip
+ * A real sprite: an 8-row pixel grid composed programmatically (so the body
+ * stretches with level), rendered to the terminal as half-blocks — each text
+ * cell is two vertical pixels via '▀' with fg = upper px, bg = lower px.
+ * 8 pixel rows → 4 text rows.
+ */
+const PX = { B: 130, T: 180, D: 94, N: 16, E: 16, R: 160, P: 211, W: 251, G: 101 };
+// B body red-brown · T tan belly · D dark ear/tail/paws · N nose · E eye
+// R collar · P tongue · W bone · G dirt
+
+function blankGrid(w, h) { return Array.from({ length: h }, () => new Array(w).fill(null)); }
+
+function buildDog(bodyPx, mood, f) {
+  // width: tail(4) + body(bodyPx) + head(9) + snout/extras(4)
+  const w = 4 + bodyPx + 13, h = 8;
+  const g = blankGrid(w, h);
+  const f2 = f % 2;
+  const hx = 4 + bodyPx;            // head start column
+  const put = (x, y, c) => { if (x >= 0 && x < w && y >= 0 && y < h) g[y][x] = c; };
+  const rect = (x0, y0, x1, y1, c) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) put(x, y, c); };
+
+  const sleeping = mood === 'sleeping';
+  const down = mood === 'sad' || mood === 'guilty';         // tail & ears droop
+  const wag = ['happy', 'excited', 'eating', 'working', 'idle'].includes(mood);
+
+  if (sleeping) {
+    // curled loaf: low body, head resting, closed eye
+    rect(3, 5, hx + 6, 5, PX.B);
+    rect(3, 6, hx + 6, 6, PX.B);
+    rect(4, 7, hx + 5, 7, PX.T);
+    rect(hx + 3, 4, hx + 7, 4, PX.B);          // head resting on body
+    put(hx + 8, 5, PX.N);
+    rect(hx + 7, 5, hx + 7, 5, PX.B);
+    put(hx + 5, 4, PX.D);                      // closed eye
+    rect(hx + 4, 3, hx + 6, 3, PX.D);          // ear over head
+    put(2, 5, PX.D); put(1, 6, PX.D);          // tail tucked
+    // z Z z
+    if (f2) { put(hx + 9, 2, PX.W); put(hx + 11, 1, PX.W); } else { put(hx + 10, 2, PX.W); }
+    return g;
+  }
+
+  // ---- body ----
+  rect(4, 3, hx - 1, 5, PX.B);
+  rect(5, 6, hx - 2, 6, PX.T);
+  // ---- head (right) ----
+  rect(hx, 2, hx + 6, 2, PX.B);                 // crown
+  rect(hx - 1, 3, hx + 7, 5, PX.B);             // skull + cheeks
+  rect(hx - 1, 6, hx + 2, 6, PX.B);             // deep dachshund chest
+  rect(hx + 3, 6, hx + 6, 6, PX.B);             // jaw
+  rect(hx + 7, 4, hx + 9, 4, PX.B);             // long snout
+  put(hx + 10, 4, PX.N);                        // nose
+  put(hx + 5, 3, PX.E);                         // eye
+  // ear: floppy, hangs on the near side
+  const earY = down ? 1 : 0;
+  rect(hx + 1, 1 + earY, hx + 3, 1 + earY, PX.D);
+  rect(hx, 2 + earY, hx + 1, 4, PX.D);
+  // collar
+  put(hx - 1, 5, PX.R); put(hx, 6, PX.R);
+  // ---- tail (left) ----
+  if (down) { put(3, 5, PX.D); put(2, 6, PX.D); }
+  else if (wag) {
+    put(3, 3, PX.D);
+    if (f2) { put(2, 2, PX.D); put(1, 1, PX.D); } else { put(2, 3, PX.D); put(1, 2, PX.D); }
+  } else { put(3, 3, PX.D); put(2, 3, PX.D); }
+  // ---- legs ----
+  const step = (mood === 'working' || mood === 'happy') ? f2 : 0;
+  rect(5 + step, 7, 6 + step, 7, PX.D);          // back pair
+  rect(hx - 3 - step, 7, hx - 2 - step, 7, PX.D); // front pair
+  // ---- mood extras ----
+  if (mood === 'happy' || mood === 'excited') put(hx + 8, 5, PX.P);        // tongue
+  if (mood === 'eating') {
+    const stage = f % 4;
+    if (stage < 3) rect(hx + 8, 6, hx + 10 - stage, 6, PX.W);              // shrinking bone
+    else put(hx + 9, 6, PX.P);
+  }
+  if (mood === 'working') { put(hx + 9, 7 - (f2 ? 0 : 1), PX.G); put(hx + 11, 7, PX.G); } // dirt
+  if (mood === 'hungry' && f2) { put(hx + 2, 0, PX.W); put(hx + 3, 0, PX.W); put(hx + 4, 0, PX.W); } // bone dream
+  if (mood === 'excited' && f2) g.push(g.shift()); // tiny jump: lift everything 1px
+  return g;
+}
+
+function gridToHalfBlocks(g) {
+  const h = g.length, w = g[0].length, rows = [];
+  for (let ty = 0; ty < h / 2; ty++) {
+    let line = '', run = null; // run: {top,bot,text}
+    const flush = () => {
+      if (!run) return;
+      if (run.top == null && run.bot == null) line += run.text;
+      else if (run.bot == null) line += `\x1b[38;5;${run.top}m` + '▀'.repeat(run.text.length) + '\x1b[0m';
+      else if (run.top == null) line += `\x1b[38;5;${run.bot}m` + '▄'.repeat(run.text.length) + '\x1b[0m';
+      else line += `\x1b[38;5;${run.top};48;5;${run.bot}m` + '▀'.repeat(run.text.length) + '\x1b[0m';
+      run = null;
+    };
+    for (let x = 0; x < w; x++) {
+      const top = g[2 * ty][x], bot = g[2 * ty + 1][x];
+      if (run && run.top === top && run.bot === bot) { run.text += ' '; continue; }
+      flush();
+      run = { top, bot, text: ' ' };
+    }
+    flush();
+    rows.push(line.replace(/\s+$/, ''));
+  }
+  return rows;
+}
+
+// -------------------------------------------------- legacy text dachshund --
+/*
+ * The original one-liner dog, kept as `--style text` for fonts/terminals
+ * that dislike half-blocks.
  */
 const FACE = {
   idle: ['˘ᴥ˘', '˘ᴥ˘'], working: ['˘ᴥ˘', '˘ᴥ˙'], happy: ['ᵔᴥᵔ', 'ᵔᴥᵔ'],
@@ -219,6 +324,17 @@ const MOOD_LABEL = {
   eating: 'nom nom', hungry: 'no commits, no kibble', guilty: 'over budget… sorry',
 };
 
+function buildChip(s, mood, level) {
+  const parts = [];
+  parts.push(paint('tan', s.name, true) + paint('faint', ' lv' + level));
+  if (s.bones > 0) parts.push(paint('dim', 'c==Ɔ ') + paint('text', String(s.bones)));
+  const tk = tokenChip();
+  if (tk) parts.push(tk);
+  const unlock = mood === 'excited' ? trophyRecentUnlock() : null;
+  parts.push(paint('faint', unlock ? 'unlocked: ' + unlock : MOOD_LABEL[mood]));
+  return parts.join(paint('faint', ' · '));
+}
+
 function render(input) {
   const s = loadFacts();
   const now = Date.now();
@@ -227,24 +343,26 @@ function render(input) {
   const mood = decideMood(s, now);
   const frame = DEMO.frame != null ? DEMO.frame : Math.floor(now / 1600);
 
-  const chipParts = [];
-  chipParts.push(paint('tan', s.name, true) + paint('faint', ' lv' + level));
-  if (s.bones > 0) chipParts.push(paint('dim', 'c==Ɔ ') + paint('text', String(s.bones)));
-  const tk = tokenChip();
-  if (tk) chipParts.push(tk);
-  const unlock = mood === 'excited' ? trophyRecentUnlock() : null;
-  chipParts.push(paint('faint', unlock ? 'unlocked: ' + unlock : MOOD_LABEL[mood]));
-  const chip = chipParts.join(paint('faint', ' · '));
+  const chip = buildChip(s, mood, level);
 
-  // fit the dog to the space left of the chip
-  const reserved = plainWidth(chip) + 6;
-  const maxSeg = Math.max(3, width - reserved - 12);
-  const segments = Math.min(DEMO.segments || (3 + level), maxSeg);
+  if ((DEMO.style || s.style || 'pixel') === 'text') {
+    // legacy one-liner dog
+    const reserved = plainWidth(chip) + 6;
+    const maxSeg = Math.max(3, width - reserved - 12);
+    const segments = Math.min(DEMO.segments || (3 + level), maxSeg);
+    const [row1, row2] = dogRows(s, mood, frame, segments);
+    const padTo = Math.max(plainWidth(row1), plainWidth(row2)) + 2;
+    return row1 + '\n' + row2 + ' '.repeat(Math.max(1, padTo - plainWidth(row2))) + chip;
+  }
 
-  const [row1, row2] = dogRows(s, mood, frame, segments);
-  const padTo = Math.max(plainWidth(row1), plainWidth(row2)) + 2;
-  const row2padded = row2 + ' '.repeat(Math.max(1, padTo - plainWidth(row2))) + chip;
-  return row1 + '\n' + row2padded;
+  // pixel sprite: body stretches with level, chip rides on the ground row
+  const reserved = plainWidth(chip) + 4;
+  const maxBody = Math.max(10, width - reserved - 17);
+  const bodyPx = Math.max(10, Math.min(DEMO.bodyPx || (8 + level * 2), maxBody));
+  const rows = gridToHalfBlocks(buildDog(bodyPx, mood, frame)).map(r => ' ' + r);
+  const padTo = Math.max(...rows.map(plainWidth)) + 3;
+  rows[rows.length - 1] += ' '.repeat(Math.max(1, padTo - plainWidth(rows[rows.length - 1]))) + chip;
+  return rows.join('\n');
 }
 
 // ------------------------------------------------------------------ card ---
@@ -255,13 +373,12 @@ function statusCard() {
   const mood = decideMood(s, Date.now());
   const rule = paint('faint', '─'.repeat(46));
   const label = t => paint('dim', t.padEnd(10));
-  const seg = Math.min(3 + level, 24);
+  const seg = Math.min(8 + level * 2, 30);
   const out = [''];
   out.push(' ' + paint('body', '▄', true) + ' ' + paint('tan', s.name, true) +
     paint('dim', `  ·  a dachshund, ${ageDays} day${ageDays === 1 ? '' : 's'} old`));
   out.push(' ' + rule);
-  const [r1, r2] = dogRows(s, mood, 0, seg);
-  out.push('  ' + r1); out.push('  ' + r2);
+  for (const r of gridToHalfBlocks(buildDog(seg, mood, 0))) out.push('  ' + r);
   out.push(' ' + rule);
   out.push(' ' + label('level') + paint('text', `${level}  `) + paint('faint', `(${xp} xp — longer every level)`));
   out.push(' ' + label('length') + paint('text', `${seg + 6} chars `) + paint('faint', 'and growing'));
@@ -294,8 +411,7 @@ function install() {
   console.log('');
   console.log(paint('gold', '  ┌─────────── ADOPTION CERTIFICATE ───────────┐', true));
   console.log('');
-  console.log('     ' + dogRows(s, 'happy', 0, 6)[0]);
-  console.log('     ' + dogRows(s, 'happy', 0, 6)[1]);
+  for (const r of gridToHalfBlocks(buildDog(10, 'happy', 0))) console.log('     ' + r);
   console.log('');
   console.log('   ' + paint('text', `This certifies that a dachshund named `) + paint('tan', s.name, true));
   console.log('   ' + paint('text', 'now lives in your Claude Code status line.'));
@@ -326,6 +442,22 @@ function main() {
   if (mode === '--hook') { try { runHook(a); } catch { /* never break the session */ } return; }
   if (mode === '--status') return console.log(statusCard());
   if (mode === '--json') return console.log(JSON.stringify(loadFacts(), null, 2));
+  if (mode === '--grid-json') {
+    // dev/asset tooling: raw pixel grid + chip for the LONGBOI_DEMO state
+    const s = loadFacts();
+    const { level } = xpLevel(s);
+    const mood = DEMO.mood || 'idle';
+    const bodyPx = DEMO.bodyPx || (8 + level * 2);
+    return console.log(JSON.stringify({
+      grid: buildDog(bodyPx, mood, DEMO.frame || 0),
+      chip: buildChip(s, mood, level),
+    }));
+  }
+  if (mode === '--style') {
+    if (!['pixel', 'text'].includes(a)) return console.log('usage: longboi.js --style pixel|text');
+    const s = loadFacts(); s.style = a; writeJSON(STATE, s);
+    return console.log(`✓ style = ${a}`);
+  }
   if (mode === '--name') {
     if (!a) return console.log('usage: longboi.js --name <name>');
     const s = loadFacts(); s.name = a.slice(0, 20); writeJSON(STATE, s);
